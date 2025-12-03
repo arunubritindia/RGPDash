@@ -352,21 +352,16 @@
          */
         async function callAppsScript(action, data = {}, method = 'GET') {
             const url = new URL(APPS_SCRIPT_URL);
-            // Append action to URL parameters, which is read by both doGet and doPost in Apps Script
-            url.searchParams.append('action', action); 
+            url.searchParams.append('action', action);
             
             const options = {
                 method: method,
-                redirect: 'follow', // Ensures fetch handles the Apps Script redirect
+                headers: {
+                    'Content-Type': 'application/json',
+                },
             };
-
+            
             if (method === 'POST') {
-                // *** CRITICAL CORS FIX: Use text/plain to avoid the CORS preflight OPTIONS request ***
-                options.headers = {
-                    'Content-Type': 'text/plain;charset=utf-8', 
-                };
-                
-                // Apps Script will read this body content via e.postData.contents and parse it.
                 options.body = JSON.stringify(data);
             }
             
@@ -388,7 +383,6 @@
 
             } catch (error) {
                 console.error(`Apps Script Call Failed (${action}):`, error);
-                // Throw a more general error for the UI
                 throw new Error(`Server operation failed. Please check the network or server logs. Detail: ${error.message}`);
             }
         }
@@ -408,8 +402,7 @@
             try {
                 // Pass DB names (though the script usually handles the primary/backup logic)
                 const payload = { primary: PRIMARY_DB_NAME, backup: BACKUP_DB_NAME };
-                // FIX APPLIED: Changed to 'POST' to use the CORS-friendly text/plain header
-                const fetchedData = await callAppsScript('fetchAllRGP', payload, 'POST'); 
+                const fetchedData = await callAppsScript('fetchAllRGP', payload, 'GET'); 
 
                 // Process data to calculate days_open
                 const processedData = fetchedData.map(data => ({
@@ -733,449 +726,630 @@
                 await callAppsScript('saveRGP', newRGP, 'POST'); 
                 
                 // Success actions: Show message & clear fields
-                showMessage("Success", `RGP ${newRGP.rgp_number} created successfully and saved.`, false);
-                
-                // Clear fields after successful entry
+                showMessage("Success", `RGP ${newRGP.rgp_number} saved successfully!`);
                 form.reset();
-                renderNewRGPFormMaterials(); // Re-render material list to default (1 item)
+                document.getElementById('material-entry-panel').innerHTML = '<p class="text-gray-500 italic p-4">Add materials using the button above.</p>';
                 
-                // Refresh the underlying data to update dashboard metrics and lists
-                fetchRGPData(); 
-
+                // Refresh data for dashboard metrics and lists
+                fetchRGPData();
+                
             } catch (e) {
                 showMessage("Database Error", `Failed to save RGP ${newRGP.rgp_number}. Reason: ${e.message}`, true);
             }
         }
-        
+
         function renderNewRGPView() {
             const contentDiv = document.getElementById('main-content');
-            const currentDate = formatDate(new Date());
-            const returnDate = dateOffset(30);
-
             contentDiv.innerHTML = `
-                <div class="grid grid-cols-3 items-center p-4 bg-white rounded-xl shadow-lg mb-6">
-                    <h2 class="text-2xl font-semibold text-gray-800 justify-self-start">New RGP Entry</h2>
-                    <div class="justify-self-center">
-                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOEAAADhCAMAAAAJ/gpwAAAArlBMVEVHcEwABwAABQAABQAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgD///8AAAC1G048AAAAPHRSTlMAECAwQFBgcICQoLCwwNDxARFRYXGBkaGxwdHh8gISIjJDY4Ojs9P0BBQ0RFR0hMU1dbXmFnaW9xdXh7f4u+K/UAAAFxSURBVHja7dzbVtsgFAZgAAEEiCBBgASBBOJ4wO3//6XlP0q9k+iWJmK3vud92n1d7xXQ0dHR0dHR0dHR0dHR0dHRCw5zNndh3t4s03j/x5057NvdhXmH27B/d9m/u+zP+x73c9+H8w53ce/tNn//z9wP5h3uu93O9/zcv+M+3Me6h+v7/pW797p24f9wP/7Rvd/1+R5Hw73Xpwu+P+29vW/7+yv+P+5z9+t+39l/hvud+/q+72x/+f9w/7P97X/f2V/h/uf729/3tv/u/sP+4/vb7/2H/3/9J/e3v/u+/+/+w/w33N8f7tNn/vX/3f2X/7fX+7Tf/5v3D/7ff6dJv++7+/+w/93693f+33//+tH97e/e7p6Oj/N74BfLw/kXkPAAAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAyNC0wMi0wNlQxODoyNjo1NyswMDowMNn1J50AAAAldEVYdGRhdGU6bW9kaWZ5ADIwMjQtMDItMDZUMTg6MjY6NTcrMDA6MDAD1L2oAAAAKHRFWHRkYXRlOnRpbWVzdGFtcD日時MjAyNC0wMi0wNlQxODoyNjo1NyswMDowMCE0L4cAAAAASUVORK5CYII=" alt="Britannia Logo" class="h-10 w-auto object-contain">
-                    </div>
-                    <button onclick="goHome()" class="bg-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-xl shadow-md hover:bg-gray-300 transition duration-150 justify-self-end">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home 
-                    </button>
-                </div>
-
-                <form id="new-rgp-form" onsubmit="handleSaveNewRGP(event)" class="bg-white p-6 rounded-xl shadow-lg">
-                    
-                    <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">RGP Header Details</h3>
-
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-                        
-                        <label class="block">
-                            <span class="text-gray-700 font-medium">RGP No. <span class="text-red-500">*</span></span>
-                            <input type="text" name="rgp-number" required placeholder="e.g., RGP/001/2024" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                        </label>
-                        
-                        <label class="block">
-                            <span class="text-gray-700 font-medium">Vendor / Sent To <span class="text-red-500">*</span></span>
-                            <input type="text" name="rgp-vendor" required placeholder="Vendor Name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                        </label>
-
-                        <label class="block">
-                            <span class="text-gray-700 font-medium">Sent By (User) <span class="text-red-500">*</span></span>
-                            <input type="text" name="rgp-sent-by" required placeholder="Your Name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                        </label>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-                        <label class="block">
-                            <span class="text-gray-700 font-medium">Issue Date <span class="text-red-500">*</span></span>
-                            <input type="date" name="rgp-date" required value="${currentDate}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                        </label>
-
-                        <label class="block">
-                            <span class="text-gray-700 font-medium">Exp. Return Date <span class="text-red-500">*</span></span>
-                            <input type="date" name="rgp-return-date" required value="${returnDate}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                        </label>
-                    </div>
-
-                    <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2 mt-8">Material Entries</h3>
-
-                    <div id="material-entry-panel" class="space-y-6 mb-6">
-                        </div>
-
-                    <button type="button" onclick="addMaterialEntry()" class="bg-indigo-500 text-white px-4 py-2 rounded-xl shadow-md hover:bg-indigo-600 transition duration-150">
-                        + Add Material Entry
-                    </button>
-                    
-                    <div class="flex justify-end pt-8 border-t mt-8">
-                        <button type="submit" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-xl shadow-xl hover:bg-blue-700 transition duration-150">
-                            Save New RGP
+                <div class="grid grid-cols-2 items-center p-4 bg-white rounded-xl shadow-lg mb-6">
+                    <h2 class="text-2xl font-semibold text-gray-800">New RGP Entry</h2>
+                    <div class="justify-self-end">
+                        <button onclick="goHome()" class="bg-blue-600 text-white px-4 py-2 rounded-xl shadow-md hover:bg-blue-700 transition duration-150">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home
                         </button>
                     </div>
+                </div>
 
+                <form id="new-rgp-form" onsubmit="handleSaveNewRGP(event)" class="bg-white p-6 rounded-xl shadow-lg space-y-6">
+
+                    <h3 class="text-xl font-medium text-gray-700 border-b pb-2">RGP Header Details</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-6">
+                        
+                        <label class="block">
+                            <span class="text-gray-700">RGP Number <span class="text-red-500">*</span></span>
+                            <input type="text" id="rgp-number" name="rgp-number" required placeholder="e.g. RGP/2024/001" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        </label>
+                        
+                        <label class="block">
+                            <span class="text-gray-700">Sent To (Vendor) <span class="text-red-500">*</span></span>
+                            <input type="text" id="rgp-vendor" name="rgp-vendor" required placeholder="Vendor Name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        </label>
+
+                        <label class="block">
+                            <span class="text-gray-700">Sent By (User) <span class="text-red-500">*</span></span>
+                            <input type="text" id="rgp-sent-by" name="rgp-sent-by" required placeholder="Your Name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        </label>
+
+                        <label class="block">
+                            <span class="text-gray-700">Issue Date <span class="text-red-500">*</span></span>
+                            <input type="date" id="rgp-date" name="rgp-date" value="${dateOffset(0)}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        </label>
+
+                        <label class="block">
+                            <span class="text-gray-700">Expected Return Date <span class="text-red-500">*</span></span>
+                            <input type="date" id="rgp-return-date" name="rgp-return-date" value="${dateOffset(30)}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        </label>
+                    </div>
+
+                    <h3 class="text-xl font-medium text-gray-700 border-b pb-2 pt-4 flex justify-between items-center">
+                        <span>Material Details</span>
+                        <button type="button" onclick="addMaterialEntry()" class="bg-indigo-500 text-white text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-indigo-600 transition duration-150">
+                            + Add Item
+                        </button>
+                    </h3>
+
+                    <div id="material-entry-panel" class="space-y-4">
+                        <p class="text-gray-500 italic p-4">Add materials using the button above.</p>
+                    </div>
+
+                    <div class="flex justify-end pt-4 border-t">
+                        <button type="submit" class="btn-new-rgp text-white px-6 py-3 rounded-xl shadow-md transition duration-150 hover:bg-indigo-700">
+                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save New RGP
+                        </button>
+                    </div>
                 </form>
             `;
-
-            window.addMaterialEntry = addMaterialEntry; // Expose globally for onclick
-            window.removeMaterialEntry = removeMaterialEntry; // Expose globally for onclick
-            window.renderNewRGPFormMaterials = renderNewRGPFormMaterials; // Expose globally for reset
-
-            renderNewRGPFormMaterials(); // Initial render
+            // Add initial empty material entry when the view is rendered
+            addMaterialEntry(true); 
         }
 
-        // State to keep track of material IDs for rendering and manipulation
         let materialCount = 0;
-        let materialIds = []; // Stores the indices of the material entries currently visible
-
-        function renderNewRGPFormMaterials() {
+        function addMaterialEntry(isInitial = false) {
             const container = document.getElementById('material-entry-panel');
-            if (!container) return; // Should not happen
-
-            // If we are resetting (e.g., after save), ensure at least one is present
-            if (materialIds.length === 0) {
-                materialCount = 0;
-                addMaterialEntry(); 
-                return;
+            if (isInitial && materialCount === 0) {
+                container.innerHTML = ''; // Clear initial placeholder text
             }
             
-            // Re-render based on current IDs
-            container.innerHTML = materialIds.map(i => createMaterialEntryHTML(i)).join('');
-        }
-
-        function addMaterialEntry() {
-            const container = document.getElementById('material-entry-panel');
-            const newId = materialCount++;
-            materialIds.push(newId);
-            container.innerHTML += createMaterialEntryHTML(newId);
+            const i = materialCount++;
+            
+            const entryDiv = document.createElement('div');
+            entryDiv.className = 'border border-gray-200 p-4 rounded-lg bg-gray-50 space-y-4';
+            entryDiv.setAttribute('data-material-id', i);
+            
+            entryDiv.innerHTML = `
+                <div class="flex justify-between items-center border-b pb-2">
+                    <h4 class="text-sm font-semibold text-gray-700">Material Item #${i + 1}</h4>
+                    <button type="button" onclick="removeMaterialEntry(${i})" class="text-red-500 hover:text-red-700 text-sm font-medium ${materialCount === 1 && isInitial ? 'hidden' : ''}">
+                        Remove
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-10 gap-4">
+                    <label class="block md:col-span-4">
+                        <span class="text-gray-700 text-sm">Description <span class="text-red-500">*</span></span>
+                        <input type="text" name="material-desc-${i}" required placeholder="Material Description" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 text-sm">
+                    </label>
+                    <label class="block md:col-span-2">
+                        <span class="text-gray-700 text-sm">Initial Qty <span class="text-red-500">*</span></span>
+                        <input type="number" name="initial-qty-${i}" min="1" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 text-sm">
+                    </label>
+                    <label class="block md:col-span-2">
+                        <span class="text-gray-700 text-sm">Unit <span class="text-red-500">*</span></span>
+                        <input type="text" name="unit-${i}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 text-sm">
+                    </label>
+                    <label class="block md:col-span-2">
+                        <span class="text-gray-700 text-sm">Remarks</span>
+                        <input type="text" name="remarks-${i}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 text-sm">
+                    </label>
+                </div>
+            `;
+            container.appendChild(entryDiv);
+            
+            // Re-check visibility of remove buttons after adding
+            updateRemoveButtonVisibility();
         }
 
         function removeMaterialEntry(idToRemove) {
-            if (materialIds.length <= 1) {
-                showMessage("Validation Error", "Cannot remove the last material entry.", true);
-                return;
-            }
-
-            // Remove from the DOM
-            const element = document.getElementById(`material-entry-${idToRemove}`);
-            if (element) {
-                element.remove();
-            }
-
-            // Remove from the tracking array
-            materialIds = materialIds.filter(id => id !== idToRemove);
-        }
-
-        function createMaterialEntryHTML(i) {
-            return `
-                <div id="material-entry-${i}" class="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                    <div class="flex justify-between items-center mb-3">
-                        <h4 class="font-semibold text-gray-700">Material #${i + 1}</h4>
-                        <button type="button" onclick="removeMaterialEntry(${i})" class="text-red-500 hover:text-red-700 disabled:text-gray-400" ${materialIds.length <= 1 ? 'disabled' : ''}>
-                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                        </button>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <label class="block md:col-span-2">
-                            <span class="text-gray-700 text-sm">Material Description <span class="text-red-500">*</span></span>
-                            <input type="text" name="material-desc-${i}" required placeholder="Description of item" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 text-sm">
-                        </label>
-                        <label class="block">
-                            <span class="text-gray-700 text-sm">Initial Qty <span class="text-red-500">*</span></span>
-                            <input type="number" name="initial-qty-${i}" min="1" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 text-sm">
-                        </label>
-                        <label class="block">
-                            <span class="text-gray-700 text-sm">Unit <span class="text-red-500">*</span></span>
-                            <input type="text" name="unit-${i}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 text-sm">
-                        </label>
-                        <label class="block md:col-span-3">
-                            <span class="text-gray-700 text-sm">Remarks</span>
-                            <input type="text" name="remarks-${i}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 text-sm">
-                        </label>
-                    </div>
-                </div>
-            `;
-        }
-
-        // --- RETURN ENTRY VIEW RENDERING & LOGIC (UNCHANGED) ---
-
-        function renderReturnEntryView() {
-            const contentDiv = document.getElementById('main-content');
-            contentDiv.innerHTML = `
-                <div class="grid grid-cols-3 items-center p-4 bg-white rounded-xl shadow-lg mb-6">
-                    <h2 class="text-2xl font-semibold text-gray-800 justify-self-start">RGP Return Entry</h2>
-                    <div class="justify-self-center">
-                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOEAAADhCAMAAAAJ/gpwAAAArlBMVEVHcEwABwAABQAABQAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgD///8AAAC1G048AAAAPHRSTlMAECAwQFBgcICQoLCwwNDxARFRYXGBkaGxwdHh8gISIjJDY4Ojs9P0BBQ0RFR0hMU1dbXmFnaW9xdXh7f4u+K/UAAAFxSURBVHja7dzbVtsgFAZgAAEEiCBBgASBBOJ4wO3//6XlP0q9k+iWJmK3vud92n1d7xXQ0dHR0dHR0dHR0dHR0dHRCw5zNndh3t4s03j/x5057NvdhXmH27B/d9m/u+zP+x73c9+H8w53ce/tNn//z9wP5h3uu93O9/zcv+M+3Me6h+v7/pW797p24f9wP/7Rvd/1+R5Hw73Xpwu+P+29vW/7+yv+P+5z9+t+39l/hvud+/q+72x/+f9w/7P97X/f2V/h/uf729/3tv/u/sP+4/vb7/2H/3/9J/e3v/u+/+/+w/w33N8f7tNn/vX/3f2X/7fX+7Tf/5v3D/7ff6dJv++7+/+w/93693f+33//+tH97e/e7p6Oj/N74BfLw/kXkPAAAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAyNC0wMi0wNlQxODoyNjo1NyswMDowMNn1J50AAAAldEVYdGRhdGU6bW9kaWZ5ADIwMjQtMDItMDZUMTg6MjY6NTcrMDA6MDAD1L2oAAAAKHRFWHRkYXRlOnRpbWVzdGFtcD日時MjAyNC0wMi0wNlQxODoyNjo1NyswMDowMCE0L4cAAAAASUVORK5CYII=" alt="Britannia Logo" class="h-10 w-auto object-contain">
-                    </div>
-                    <button onclick="goHome()" class="bg-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-xl shadow-md hover:bg-gray-300 transition duration-150 justify-self-end">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home 
-                    </button>
-                </div>
+            const container = document.getElementById('material-entry-panel');
+            const elementToRemove = container.querySelector(`[data-material-id="${idToRemove}"]`);
+            
+            if (elementToRemove) {
+                elementToRemove.remove();
+                materialCount--; // Only decrement if an item was actually removed
                 
-                <div class="bg-white p-6 rounded-xl shadow-lg mb-6">
-                    <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Find RGP to Return</h3>
-                    <div class="flex space-x-4">
-                        <input type="text" id="rgp-number-input" placeholder="Enter RGP Number (e.g., RGP/001/2024)" value="${selectedRGPNumber || ''}"
-                               class="block w-2/3 rounded-md border-gray-300 shadow-sm p-2 focus:border-green-300 focus:ring focus:ring-green-200 focus:ring-opacity-50"
-                               onkeypress="if(event.key === 'Enter') { event.preventDefault(); findRGPForReturn(); }">
-                        <button onclick="findRGPForReturn()" class="btn-return text-white font-bold py-2 px-6 rounded-xl shadow-md hover:bg-green-700 transition duration-150">
-                            Find RGP
-                        </button>
-                    </div>
-                </div>
-
-                <div id="return-entry-details-container" class="hidden bg-white p-6 rounded-xl shadow-lg">
-                    </div>
-            `;
-            
-            window.findRGPForReturn = findRGPForReturn; // Expose globally
-            window.handleMaterialReturn = handleMaterialReturn; // Expose globally
-            window.finalizeRGPReturn = finalizeRGPReturn; // Expose globally
-
-            if (selectedRGPNumber) {
-                findRGPForReturn();
-            } else {
-                renderReturnEntryDynamicDetails(); // Render initial state (empty)
+                // Re-index remaining elements to maintain form data integrity 
+                // (Though not strictly necessary for this simple form, it's good practice)
+                const remainingEntries = container.querySelectorAll('[data-material-id]');
+                remainingEntries.forEach((entry, index) => {
+                    entry.setAttribute('data-material-id', index);
+                    // Update header
+                    entry.querySelector('h4').textContent = `Material Item #${index + 1}`;
+                    // Update input names for fields that might be used server-side
+                    entry.querySelectorAll('input').forEach(input => {
+                        input.name = input.name.replace(/-\d+$/, `-${index}`);
+                    });
+                    // Update remove button onclick handler
+                    const removeBtn = entry.querySelector('button[onclick^="removeMaterialEntry"]');
+                    if (removeBtn) {
+                        removeBtn.setAttribute('onclick', `removeMaterialEntry(${index})`);
+                    }
+                });
             }
+            
+            // If all materials are removed, show placeholder
+            if (materialCount === 0) {
+                 container.innerHTML = '<p class="text-gray-500 italic p-4">Add materials using the button above.</p>';
+            }
+            
+            updateRemoveButtonVisibility();
         }
 
-        function findRGPForReturn() {
-            const rgpNumber = document.getElementById('rgp-number-input').value.trim().toUpperCase();
-            if (!rgpNumber) {
-                showMessage("Input Required", "Please enter an RGP Number.", true);
-                return;
-            }
+        function updateRemoveButtonVisibility() {
+             const container = document.getElementById('material-entry-panel');
+             const removeButtons = container.querySelectorAll('button[onclick^="removeMaterialEntry"]');
+             
+             // If there is only one item, hide the remove button on it
+             if (removeButtons.length === 1) {
+                 removeButtons[0].classList.add('hidden');
+             } else {
+                 removeButtons.forEach(btn => btn.classList.remove('hidden'));
+             }
+        }
 
-            selectedRGP = RGPManager.find_rgp_by_number(rgpNumber);
-            selectedRGPNumber = rgpNumber; // Keep it in state
+
+        // --- RETURN ENTRY VIEW RENDERING & LOGIC (MODIFIED: handleSaveReturnEntry uses Apps Script) ---
+
+        /**
+         * Handles the lookup of the RGP Number entered in the form.
+         * Fetches data if not already selected or if a new number is entered.
+         */
+        async function handleRGPLookup(event) {
+            if (event) event.preventDefault();
             
-            if (!selectedRGP) {
-                showMessage("RGP Not Found", `RGP Number ${rgpNumber} was not found in the open/closed list.`, true);
-                selectedRGP = null;
+            const rgpNumberInput = document.getElementById('rgp-number-lookup');
+            const rgpNumber = rgpNumberInput.value.trim().toUpperCase();
+            
+            if (rgpNumber === selectedRGPNumber) {
+                // If the user hits enter on the same RGP number, just re-render
                 renderReturnEntryDynamicDetails();
                 return;
             }
 
-            if (selectedRGP.status.toUpperCase() === 'CLOSED') {
-                showMessage("RGP Closed", `RGP Number ${rgpNumber} is already closed.`, false);
-                // Still show details but disable return buttons
-            }
+            // Clear previous state and show loading
+            selectedRGP = null;
+            selectedRGPNumber = rgpNumber;
+            renderReturnEntryDynamicDetails("Looking up RGP..."); 
             
-            renderReturnEntryDynamicDetails(selectedRGP);
-        }
-
-        function renderReturnEntryDynamicDetails(rgp = null) {
-            const container = document.getElementById('return-entry-details-container');
-            const rgpNumberInput = document.getElementById('rgp-number-input');
-
-            if (!container) return; // Should not happen
-
-            if (!rgp) {
-                container.classList.add('hidden');
-                rgpNumberInput.classList.remove('border-green-400', 'ring-green-100');
-                rgpNumberInput.classList.add('border-gray-300');
-                container.innerHTML = '';
+            if (!rgpNumber) {
+                renderReturnEntryDynamicDetails(); // Render empty state
                 return;
             }
 
-            rgpNumberInput.classList.add('border-green-400', 'ring-green-100');
-            rgpNumberInput.classList.remove('border-gray-300');
-            container.classList.remove('hidden');
+            // Find RGP in local data (assumes fetchRGPData keeps data fresh)
+            const rgp = RGPManager.find_rgp_by_number(rgpNumber);
+            
+            if (rgp) {
+                selectedRGP = rgp;
+            } 
+            
+            // Render the details based on the lookup result
+            renderReturnEntryDynamicDetails(); 
+        }
 
-            const isClosed = rgp.status.toUpperCase() === 'CLOSED';
-            const statusColor = isClosed ? 'text-green-600' : 'text-red-600';
-            const daysOpen = RGPManager.calculate_days_open(rgp.issue_date);
+        /**
+         * Handles the saving of the return entry data by calling the Apps Script.
+         */
+        async function handleSaveReturnEntry(event) {
+            event.preventDefault();
+            if (!selectedRGP) {
+                showMessage("Error", "No RGP selected for return entry.", true);
+                return;
+            }
 
-            let materialHtml = '';
-            rgp.materials.forEach((m, index) => {
-                const outstandingQty = m.initial_qty - m.returned_qty;
-                const materialIsClosed = outstandingQty <= 0;
-                const returnButtonText = materialIsClosed ? 'Closed' : 'Return Partial/Full';
-                
-                materialHtml += `
-                    <div id="material-row-${index}" class="bg-gray-100 p-4 rounded-lg border border-gray-300 mb-4">
-                        <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
-                            <div class="md:col-span-3">
-                                <p class="text-sm font-semibold text-gray-700">Material Description:</p>
-                                <p class="font-bold text-base">${m.desc} (${m.unit})</p>
-                            </div>
-                            <div class="text-center">
-                                <p class="text-sm text-gray-500">Initial Qty</p>
-                                <p class="font-extrabold text-lg text-blue-600">${m.initial_qty}</p>
-                            </div>
-                            <div class="text-center">
-                                <p class="text-sm text-gray-500">Returned Qty</p>
-                                <p class="font-extrabold text-lg text-green-600">${m.returned_qty}</p>
-                            </div>
-                            <div class="text-center">
-                                <p class="text-sm text-gray-500">Outstanding</p>
-                                <p class="font-extrabold text-lg ${outstandingQty > 0 ? 'text-red-600' : 'text-gray-500'}">${outstandingQty}</p>
-                            </div>
-                        </div>
-                        
-                        <div class="flex items-end space-x-4 mt-4 pt-4 border-t border-gray-300">
-                            <label class="block flex-grow">
-                                <span class="text-gray-700 text-sm font-medium">Qty to Return</span>
-                                <input type="number" id="return-qty-${index}" min="1" max="${outstandingQty}" step="any" placeholder="Enter quantity" ${materialIsClosed || isClosed ? 'disabled' : ''}
-                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 text-sm disabled:bg-gray-200">
-                            </label>
-                            <button onclick="handleMaterialReturn(${index})" 
-                                    class="bg-green-600 text-white font-semibold py-2 px-4 rounded-xl shadow-md hover:bg-green-700 transition duration-150 whitespace-nowrap disabled:bg-gray-400"
-                                    ${materialIsClosed || isClosed ? 'disabled' : ''}>
-                                ${returnButtonText}
-                            </button>
-                        </div>
-                        <p class="text-xs text-gray-500 mt-2">Remarks: ${m.remarks || 'N/A'}</p>
-                    </div>
-                `;
+            const form = document.getElementById('return-entry-form');
+            const returnEntries = [];
+            let validationFailed = false;
+            let totalReturnQty = 0;
+
+            // 1. Validate Return Quantities
+            selectedRGP.materials.forEach(material => {
+                const input = form.querySelector(`input[data-material-id="${material.id}"]`);
+                if (!input) return;
+
+                const returnQty = parseInt(input.value) || 0;
+                const outstanding = material.initial_qty - material.returned_qty;
+
+                if (returnQty < 0 || returnQty > outstanding) {
+                    validationFailed = true;
+                    showMessage("Validation Error", `Material: ${material.desc}. Return quantity (${returnQty}) must be between 0 and outstanding quantity (${outstanding}).`, true);
+                }
+
+                if (returnQty > 0) {
+                    returnEntries.push({
+                        material_id: material.id,
+                        return_qty: returnQty
+                    });
+                    totalReturnQty += returnQty;
+                }
             });
 
+            if (validationFailed) return;
 
-            container.innerHTML = `
-                <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">RGP Details: <span class="${statusColor}">${rgp.rgp_number.toUpperCase()} (${rgp.status.toUpperCase()})</span></h3>
+            if (totalReturnQty === 0) {
+                showMessage("Validation Error", "Please enter at least one material quantity to return.", true);
+                return;
+            }
+
+            // 2. Prepare payload for Apps Script
+            const returnData = {
+                action: 'saveReturnEntry',
+                db_name: PRIMARY_DB_NAME,
+                rgp_id: selectedRGP.id, // Use the unique ID for lookup on the backend
+                rgp_number: selectedRGP.rgp_number, 
+                return_date: form['actual-return-date'].value,
+                entries: returnEntries
+            };
+
+            // 3. Save to Apps Script
+            try {
+                // The script is expected to update the material returned_qty and RGP status if all are closed
+                await callAppsScript('saveReturnEntry', returnData, 'POST'); 
                 
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 text-sm">
-                    <div>
-                        <p class="text-gray-500 font-medium">Vendor / Sent To:</p>
-                        <p class="font-bold">${rgp.sent_to}</p>
-                    </div>
-                    <div>
-                        <p class="text-gray-500 font-medium">Sent By (User):</p>
-                        <p class="font-bold">${rgp.sent_by}</p>
-                    </div>
-                    <div>
-                        <p class="text-gray-500 font-medium">Issue Date:</p>
-                        <p class="font-bold">${formatDateDisplay(rgp.issue_date)}</p>
-                    </div>
-                    <div>
-                        <p class="text-gray-500 font-medium">Exp. Return Date:</p>
-                        <p class="font-bold">${formatDateDisplay(rgp.expected_return_date)}</p>
-                        <p class="text-xs text-gray-500 mt-1">Days Open: ${daysOpen}</p>
-                    </div>
-                </div>
+                // Success actions: Show message & clear fields
+                showMessage("Success", `Return entry saved successfully for RGP ${selectedRGP.rgp_number}.`);
+                
+                // Reset form state and refresh data
+                selectedRGP = null;
+                selectedRGPNumber = null;
+                document.getElementById('rgp-number-lookup').value = '';
 
-                <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2 mt-8">Material Return Entries</h3>
+                // Refresh data to update dashboard metrics and lists
+                fetchRGPData();
 
-                ${materialHtml}
+            } catch (e) {
+                showMessage("Database Error", `Failed to save return entry for RGP ${selectedRGP.rgp_number}. Reason: ${e.message}`, true);
+            }
+        }
 
-                <div class="flex justify-end pt-6 border-t mt-4">
-                    <button onclick="finalizeRGPReturn()" 
-                            class="bg-indigo-600 text-white font-bold py-3 px-8 rounded-xl shadow-xl hover:bg-indigo-700 transition duration-150 disabled:bg-gray-400"
-                            ${isClosed ? 'disabled' : ''}>
-                        ${isClosed ? 'RGP Already Closed' : 'Finalize RGP Return'}
-                    </button>
+
+        /**
+         * Renders the material list table for the return entry view. (UNCHANGED)
+         * @param {object|null} rgp - The selected RGP object.
+         */
+        function renderReturnMaterialList(rgp) {
+            const container = document.getElementById('rgp-material-list-container');
+            if (!container) return;
+
+            if (!rgp || rgp.status.toUpperCase() === 'CLOSED') {
+                container.innerHTML = rgp && rgp.status.toUpperCase() === 'CLOSED' ? 
+                    '<p class="text-lg text-green-600 font-semibold p-4 bg-green-50 rounded-lg">This RGP is already CLOSED.</p>' :
+                    '<p class="text-gray-500 italic p-4">Please enter a valid RGP Number to see material details.</p>';
+                return;
+            }
+
+            const materialsHtml = `
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Initial Qty</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Returned Qty</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Return Now</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            ${rgp.materials.map(material => {
+                                const outstanding = material.initial_qty - material.returned_qty;
+                                if (outstanding <= 0) return ''; // Skip fully returned materials
+                                
+                                return `
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${material.desc} (${material.unit})</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">${material.initial_qty}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-green-600 font-medium">${material.returned_qty}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-bold text-red-600">${outstanding}</td>
+                                        <td class="px-6 py-2 whitespace-nowrap text-sm text-center">
+                                            <input type="number" 
+                                                min="0" 
+                                                max="${outstanding}" 
+                                                value="0" 
+                                                data-material-id="${material.id}"
+                                                class="w-20 text-center rounded-md border-gray-300 shadow-sm p-1 text-sm focus:ring-green-500 focus:border-green-500">
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
                 </div>
             `;
+            container.innerHTML = materialsHtml;
         }
 
-        async function handleMaterialReturn(materialIndex) {
-            if (!selectedRGP) return;
-
-            const rgpNumber = selectedRGP.rgp_number;
-            const material = selectedRGP.materials[materialIndex];
-            const outstandingQty = material.initial_qty - material.returned_qty;
-            const input = document.getElementById(`return-qty-${materialIndex}`);
-            const returnQty = parseFloat(input.value);
-
-            if (isNaN(returnQty) || returnQty <= 0) {
-                showMessage("Validation Error", "Please enter a valid return quantity greater than 0.", true);
-                return;
-            }
+        /**
+         * Renders the RGP details and material list based on the selectedRGP state.
+         * @param {string} [loadingMessage=null] - Optional loading message to display.
+         */
+        function renderReturnEntryDynamicDetails(loadingMessage = null) {
+            const rgp = selectedRGP;
+            const rgpNumber = selectedRGPNumber || '';
             
-            if (returnQty > outstandingQty) {
-                showMessage("Validation Error", `Return quantity (${returnQty}) cannot exceed outstanding quantity (${outstandingQty}).`, true);
+            let rgpDetailsHtml = '';
+            let saveButtonDisabled = true;
+            let saveButtonText = 'Save Return Entry';
+
+            if (loadingMessage) {
+                rgpDetailsHtml = `<div class="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 font-medium">${loadingMessage}</div>`;
+                saveButtonText = 'Saving...';
+                
+            } else if (rgp) {
+                saveButtonDisabled = rgp.status.toUpperCase() === 'CLOSED';
+                saveButtonText = saveButtonDisabled ? 'RGP Already Closed' : 'Save Return Entry';
+                
+                // 1. RGP Details Header
+                rgpDetailsHtml = `
+                    <h3 class="text-xl font-medium text-gray-700 border-b pb-2 mb-4">RGP Header Details</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <p class="font-medium text-gray-700">RGP No:</p><p class="font-bold text-gray-900">${rgp.rgp_number}</p>
+                        <p class="font-medium text-gray-700">Issue Date:</p><p class="font-bold text-gray-900">${formatDateDisplay(rgp.issue_date)}</p>
+                        <p class="font-medium text-gray-700">Vendor:</p><p class="font-bold text-gray-900 truncate" title="${rgp.sent_to}">${rgp.sent_to}</p>
+                        <p class="font-medium text-gray-700">Expected Return:</p><p class="font-bold text-gray-900">${formatDateDisplay(rgp.expected_return_date)}</p>
+                        <p class="font-medium text-gray-700">Sent By:</p><p class="font-bold text-gray-900">${rgp.sent_by}</p>
+                        <p class="font-medium text-gray-700">Status:</p><p class="font-bold text-${rgp.status.toUpperCase() === 'CLOSED' ? 'green-600' : 'red-600'}">${rgp.status.toUpperCase()}</p>
+                    </div>`;
+            } else if (rgpNumber.length > 0) {
+                // RGP not found
+                rgpDetailsHtml = `<div class="bg-yellow-50 p-4 rounded-lg text-sm text-yellow-800 font-medium">RGP Number ${rgpNumber} not found in the database.</div>`;
+            } else {
+                rgpDetailsHtml = `<div class="bg-gray-200 p-4 rounded-lg text-sm text-gray-700 font-medium">Enter an RGP Number to see details.</div>`;
+            }
+
+            // 3. Update UI
+            document.getElementById('rgp-details-panel').innerHTML = rgpDetailsHtml;
+            renderReturnMaterialList(rgp);
+
+            const saveButton = document.getElementById('save-return-btn');
+            if (saveButton) {
+                saveButton.textContent = saveButtonText;
+                saveButton.disabled = saveButtonDisabled;
+                saveButton.className = saveButtonDisabled ? 
+                    'bg-gray-400 text-white px-6 py-3 rounded-xl shadow-md cursor-not-allowed' : 
+                    'bg-green-600 text-white px-6 py-3 rounded-xl shadow-md hover:bg-green-700 transition duration-150';
+            }
+        }
+
+        function renderReturnEntryView() {
+            const contentDiv = document.getElementById('main-content');
+            
+            contentDiv.innerHTML = `
+                <div class="grid grid-cols-2 items-center p-4 bg-white rounded-xl shadow-lg mb-6">
+                    <h2 class="text-2xl font-semibold text-gray-800">Return Entry</h2>
+                    <div class="justify-self-end">
+                        <button onclick="goHome()" class="bg-blue-600 text-white px-4 py-2 rounded-xl shadow-md hover:bg-blue-700 transition duration-150">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-lg space-y-6">
+                    
+                    <h3 class="text-xl font-medium text-gray-700 border-b pb-2">RGP Lookup</h3>
+                    <form onsubmit="handleRGPLookup(event)" class="flex space-x-4 items-end">
+                        <label class="block flex-grow">
+                            <span class="text-gray-700">RGP Number <span class="text-red-500">*</span></span>
+                            <input type="text" id="rgp-number-lookup" value="${selectedRGPNumber || ''}" required placeholder="Enter RGP Number" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 uppercase">
+                        </label>
+                        <button type="submit" class="bg-indigo-500 text-white px-4 py-2.5 rounded-xl shadow-md hover:bg-indigo-600 transition duration-150 flex-shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Lookup
+                        </button>
+                    </form>
+                    
+                    <div id="rgp-details-panel" class="p-4 border border-gray-100 rounded-lg">
+                        </div>
+
+                    <h3 class="text-xl font-medium text-gray-700 border-b pb-2 pt-4">Return Materials Entry</h3>
+                    <form id="return-entry-form" onsubmit="handleSaveReturnEntry(event)" class="space-y-4">
+                        
+                        <label class="block max-w-sm">
+                            <span class="text-gray-700">Actual Return Date <span class="text-red-500">*</span></span>
+                            <input type="date" id="actual-return-date" name="actual-return-date" value="${dateOffset(0)}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        </label>
+
+                        <div id="rgp-material-list-container" class="bg-white border border-gray-200 rounded-lg shadow-inner">
+                             <p class="text-gray-500 italic p-4">Material list will appear here after lookup.</p>
+                        </div>
+
+                        <div class="flex justify-end">
+                            <button type="submit" id="save-return-btn" disabled class="bg-gray-400 text-white px-6 py-3 rounded-xl shadow-md cursor-not-allowed">
+                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Return Entry
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            // Initial render of dynamic content (details and material list)
+            renderReturnEntryDynamicDetails();
+        }
+
+        // --- RGP LIST UTILITY FUNCTIONS (UNCHANGED) ---
+
+        /**
+         * Converts RGP data (which contains a materials array) into a flattened
+         * array of rows where each material is a separate row, used for table rendering and export.
+         * @param {Array<Object>} data - Array of RGP objects.
+         * @returns {Array<Object>} Flattened array of row data.
+         */
+        function dataToRowData(data) {
+            const rowData = [];
+            data.forEach(rgp => {
+                const materials = rgp.materials.filter(m => m.initial_qty - m.returned_qty > 0 || rgp.status.toUpperCase() !== 'OPEN'); // Filter to show outstanding for OPEN, all for others
+                
+                // If there are no materials (shouldn't happen) or all returned (for CLOSED)
+                if (materials.length === 0 && rgp.status.toUpperCase() !== 'OPEN') {
+                    // Create a single row for the RGP with default material info
+                    rowData.push({
+                         rgpNumber: rgp.rgp_number,
+                         vendor: rgp.sent_to,
+                         sentBy: rgp.sent_by,
+                         issueDate: formatDateDisplay(rgp.issue_date),
+                         expectedReturnDate: formatDateDisplay(rgp.expected_return_date),
+                         status: rgp.status,
+                         daysOpen: rgp.days_open,
+                         materialDesc: 'N/A (All Items Closed)',
+                         initialQty: 0,
+                         returnedQty: 0,
+                         outstandingQty: 0,
+                         remarks: '',
+                         uniqueId: rgp.id,
+                         rowSpan: 1,
+                         isMainRow: true
+                    });
+                    return;
+                } else if (materials.length === 0 && rgp.status.toUpperCase() === 'OPEN') {
+                     // Should not happen for an OPEN RGP unless initial data is bad
+                     return;
+                }
+
+                materials.forEach((material, index) => {
+                    const outstanding = material.initial_qty - material.returned_qty;
+                    
+                    rowData.push({
+                        rgpNumber: rgp.rgp_number,
+                        vendor: rgp.sent_to,
+                        sentBy: rgp.sent_by,
+                        issueDate: formatDateDisplay(rgp.issue_date),
+                        expectedReturnDate: formatDateDisplay(rgp.expected_return_date),
+                        status: rgp.status,
+                        daysOpen: rgp.days_open,
+                        materialDesc: `${material.desc} (${material.unit})`,
+                        initialQty: material.initial_qty,
+                        returnedQty: material.returned_qty,
+                        outstandingQty: outstanding,
+                        remarks: material.remarks,
+                        uniqueId: rgp.id,
+                        rowSpan: index === 0 ? materials.length : 0, // Mark the first material row with the total row span
+                        isMainRow: index === 0 // Flag for the row that holds main RGP details
+                    });
+                });
+            });
+            return rowData;
+        }
+
+        /**
+         * Renders the HTML table body from flattened row data.
+         * @param {Array<Object>} rows - Flattened array of row data.
+         * @param {string} tbodyId - ID of the tbody element.
+         */
+        function renderRGPTableBody(rows, tbodyId) {
+            const tbody = document.getElementById(tbodyId);
+            if (!tbody) return;
+            tbody.innerHTML = ''; // Clear previous content
+
+            if (rows.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="12" class="px-6 py-4 text-center text-gray-500 italic">No matching RGP records found.</td>
+                    </tr>
+                `;
                 return;
             }
 
-            const returnDate = formatDate(new Date());
-
-            const returnPayload = {
-                action: 'returnMaterial', 
-                db_name: PRIMARY_DB_NAME,
-                rgp_number: rgpNumber,
-                material_index: materialIndex, // Index is used to find the right row in the materials array
-                return_qty: returnQty,
-                return_date: returnDate,
-            };
-
-            try {
-                // Call Apps Script to process the material return
-                await callAppsScript('returnRGP', returnPayload, 'POST'); 
-
-                // Update local state to reflect the change
-                material.returned_qty += returnQty;
+            rows.forEach(row => {
+                const statusColor = row.status.toUpperCase() === 'CLOSED' ? 'text-green-600' : 
+                                    (row.status.toUpperCase() === 'OPEN' && row.outstandingQty === 0) ? 'text-green-600' :
+                                    'text-red-600';
                 
-                // Recalculate outstanding and re-render the view
-                const newOutstanding = material.initial_qty - material.returned_qty;
-                const returnStatus = newOutstanding <= 0 ? 'fully returned' : 'partially returned';
+                // Color days open if overdue
+                let daysOpenCell = 'text-gray-700';
+                if (row.status.toUpperCase() === 'OPEN') {
+                    // Check if RGP is overdue (30 days past expected return date)
+                    const expectedReturn = parseDate(row.expectedReturnDate.split('/').reverse().join('-')); // Convert DD/MM/YYYY back to Date object
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0); 
 
-                showMessage("Success", `Material #${materialIndex + 1} for RGP ${rgpNumber} successfully ${returnStatus}.`, false);
-
-                // Re-render the form with updated state
-                renderReturnEntryDynamicDetails(selectedRGP); 
-
-                // Refresh the underlying data to update dashboard metrics and lists
-                fetchRGPData(); 
-                
-            } catch (e) {
-                showMessage("Database Error", `Failed to save material return: ${e.message}`, true);
-            }
-        }
-
-        async function finalizeRGPReturn() {
-            if (!selectedRGP || selectedRGP.status.toUpperCase() === 'CLOSED') return;
-
-            const totalOutstanding = selectedRGP.materials.reduce((sum, m) => sum + (m.initial_qty - m.returned_qty), 0);
-
-            if (totalOutstanding > 0) {
-                const confirmMessage = `RGP ${selectedRGP.rgp_number} still has ${totalOutstanding} unit(s) outstanding across its materials. Are you sure you want to CLOSE it? This action cannot be reversed in the app.`;
-                if (!confirm(confirmMessage)) {
-                    return;
+                    const thirtyDaysAfterReturn = new Date(expectedReturn);
+                    thirtyDaysAfterReturn.setDate(expectedReturn.getDate() + 30);
+                    
+                    if (today > thirtyDaysAfterReturn) {
+                        daysOpenCell = 'text-red-600 font-extrabold';
+                    }
                 }
-            }
-
-            const closePayload = {
-                action: 'closeRGP',
-                db_name: PRIMARY_DB_NAME,
-                rgp_number: selectedRGP.rgp_number,
-            };
-
-            try {
-                // Call Apps Script to close the RGP
-                await callAppsScript('closeRGP', closePayload, 'POST'); 
                 
-                // Update local state
-                selectedRGP.status = 'CLOSED';
-
-                showMessage("RGP Closed", `RGP ${selectedRGP.rgp_number} has been successfully closed.`, false);
                 
-                // Re-render the form to show the final state and disable buttons
-                renderReturnEntryDynamicDetails(selectedRGP);
-                
-                // Refresh the underlying data to update dashboard metrics and lists
-                fetchRGPData(); 
+                let rgpNumberCell = '';
+                let vendorCell = '';
+                let sentByCell = '';
+                let issueDateCell = '';
+                let expectedReturnDateCell = '';
+                let statusCell = '';
+                let daysOpenCellHtml = '';
+                let actionCell = '';
 
-            } catch (e) {
-                showMessage("Database Error", `Failed to close RGP: ${e.message}`, true);
-            }
+                if (row.isMainRow) {
+                    rgpNumberCell = `<td rowspan="${row.rowSpan}" class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">${row.rgpNumber}</td>`;
+                    vendorCell = `<td rowspan="${row.rowSpan}" class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 truncate" title="${row.vendor}">${row.vendor}</td>`;
+                    sentByCell = `<td rowspan="${row.rowSpan}" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.sentBy}</td>`;
+                    issueDateCell = `<td rowspan="${row.rowSpan}" class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">${row.issueDate}</td>`;
+                    expectedReturnDateCell = `<td rowspan="${row.rowSpan}" class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">${row.expectedReturnDate}</td>`;
+                    statusCell = `<td rowspan="${row.rowSpan}" class="px-6 py-4 whitespace-nowrap text-sm font-bold text-center ${statusColor}">${row.status.toUpperCase()}</td>`;
+                    daysOpenCellHtml = `<td rowspan="${row.rowSpan}" class="px-6 py-4 whitespace-nowrap text-sm font-bold text-center ${daysOpenCell}">${row.daysOpen}</td>`;
+                    actionCell = `<td rowspan="${row.rowSpan}" class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button onclick="editRGP('${row.rgpNumber}')" title="Go to Return Entry" class="text-indigo-600 hover:text-indigo-900 disabled:text-gray-400 disabled:cursor-not-allowed" ${row.status.toUpperCase() === 'CLOSED' ? 'disabled' : ''}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                    </td>`;
+                }
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-gray-50 ${row.isMainRow ? 'border-t-2 border-gray-100' : ''}">
+                        ${rgpNumberCell}
+                        ${vendorCell}
+                        ${sentByCell}
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${row.materialDesc}</td>
+                        ${issueDateCell}
+                        ${expectedReturnDateCell}
+                        ${statusCell}
+                        ${daysOpenCellHtml}
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-700">${row.initialQty}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-green-600 font-medium">${row.returnedQty}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-bold ${row.outstandingQty > 0 ? 'text-red-600' : 'text-gray-500'}">${row.outstandingQty}</td>
+                        ${actionCell}
+                    </tr>
+                `;
+            });
         }
 
+        // --- PENDING RGP LIST VIEW RENDERING & FILTERING (UNCHANGED) ---
 
-        // --- PENDING RGP LIST VIEW RENDERING & LOGIC (UNCHANGED) ---
+        function updateRGPListUI(data, tbodyId, titleId) {
+            const rows = dataToRowData(data);
+            renderRGPTableBody(rows, tbodyId);
+            
+            // Update header with count
+            const titleElement = document.getElementById(titleId);
+            if (titleElement) {
+                const totalCount = [...new Set(data.map(r => r.rgp_number))].length;
+                titleElement.textContent = `Pending RGP List (${totalCount} Unique RGPs)`;
+            }
+        }
 
         function renderPendingRGPListView() {
             const contentDiv = document.getElementById('main-content');
             
-            // Re-filter the data just in case it's stale, though it should be filtered on click
-            filteredRGPData = RGPManager.get_pending_rgp_data(currentRGPData);
+            // Filter is simplified since we only show OPEN items in this view.
+            const dataToDisplay = pendingRGPData.filter(rgp => rgp.materials.some(m => m.initial_qty > m.returned_qty));
+            filteredRGPData = dataToDisplay;
 
             contentDiv.innerHTML = `
                 <div class="grid grid-cols-3 items-center p-4 bg-white rounded-xl shadow-lg mb-6">
-                    <h2 id="pending-list-title" class="text-2xl font-semibold text-gray-800 justify-self-start">Pending RGP List (Open)</h2>
+                    <h2 id="pending-list-title" class="text-2xl font-semibold text-gray-800 justify-self-start">Pending RGP List</h2>
                     <div class="justify-self-center">
-                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOEAAADhCAMAAAAJ/gpwAAAArlBMVEVHcEwABwAABQAABQAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgD///8AAAC1G048AAAAPHRSTlMAECAwQFBgcICQoLCwwNDxARFRYXGBkaGxwdHh8gISIjJDY4Ojs9P0BBQ0RFR0hMU1dbXmFnaW9xdXh7f4u+K/UAAAFxSURBVHja7dzbVtsgFAZgAAEEiCBBgASBBOJ4wO3//6XlP0q9k+iWJmK3vud92n1d7xXQ0dHR0dHR0dHR0dHR0dHRCw5zNndh3t4s03j/x5057NvdhXmH27B/d9m/u+zP+x73c9+H8w53ce/tNn//z9wP5h3uu93O9/zcv+M+3Me6h+v7/pW797p24f9wP/7Rvd/1+R5Hw73Xpwu+P+29vW/7+yv+P+5z9+t+39l/hvud+/q+72x/+f9w/7P97X/f2V/h/uf729/3tv/u/sP+4/vb7/2H/3/9J/e3v/u+/+/+w/w33N8f7tNn/vX/3f2X/7fX+7Tf/5v3D/7ff6dJv++7+/+w/93693f+33//+tH97e/e7p6Oj/N74BfLw/kXkPAAAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAyNC0wMi0wNlQxODoyNjo1NyswMDowMNn1J50AAAAldEVYdGRhdGU6bW9kaWZ5ADIwMjQtMDItMDZUMTg6MjY6NTcrMDA6MDAD1L2oAAAAKHRFWHRkYXRlOnRpbWVzdGFtcD日時MjAyNC0wMi0wNlQxODoyNjo1NyswMDowMCE0L4cAAAAASUVORK5CYII=" alt="Britannia Logo" class="h-10 w-auto object-contain">
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOEAAADhCAMAAAAJ/gpwAAAArlBMVEVHcEwABwAABQAABQAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgD///8AAAC1G048AAAAPHRSTlMAECAwQFBgcICQoLCwwNDxARFRYXGBkaGxwdHh8gISIjJDY4Ojs9P0BBQ0RFR0hMU1dbXmFnaW9xdXh7f4u+K/UAAAFxSURBVHja7dzbVtsgFAZgAAEEiCBBgASBBOJ4wO3//6XlP0q9k+iWJmK3vud92n1d7xXQ0dHR0dHR0dHR0dHR0dHRCw5zNndh3t4s03j/x5057NvdhXmH27B/d9m/u+zP+x73c9+H8w53ce/tNn//z9wP5h3uu93O9/zcv+M+3Me6h+v7/pW797p24f9wP/7Rvd/1+R5Hw73Xpwu+P+29vW/7+yv+P+5z9+t+39l/hvud+/q+72x/+f9w/7P97X/f2V/h/uf729/3tv/u/sP+4/vb7/2H/3/9J/e3v/u+/+/+w/w33N8f7tNn/vX/3f2X/7fX+7Tf/5v3D/7ff6dJv++7+/+w/93693f+33//+tH97e/e7p6Oj/N74BfLw/kXkPAAAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAyNC0wMi0wNlQxODoyNjo1NyswMDowMNn1J50AAAAldEVYdGRhdGU6bW9kaWZ5ADIwMjQtMDItMDZUMTg6MjY6NTcrMDA6MDAD1L2oAAAAKHRFWHRkYXRlOnRpbWVzdGFtcD日時MjAyNC0wMi0wNlQxODoyNjo1NyswMDowMCE0L4cAAAAASUVORK5CYII=" alt="Britannia Logo" class="h-12 w-auto object-contain">
                     </div>
-                    <div class="flex space-x-4 justify-self-end">
-                        <button onclick="goHome()" class="bg-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-xl shadow-md hover:bg-gray-300 transition duration-150">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home 
+                    <div class="justify-self-end space-x-4">
+                         <button onclick="goHome()" class="bg-blue-600 text-white px-4 py-2 rounded-xl shadow-md hover:bg-blue-700 transition duration-150">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home
                         </button>
                          <button onclick="exportPendingRGPList()" class="bg-green-600 text-white px-4 py-2 rounded-xl shadow-md hover:bg-green-700 transition duration-150">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Export
@@ -1184,8 +1358,8 @@
                 </div>
 
                 <div class="bg-white p-6 rounded-xl shadow-lg">
-                    <div class="overflow-x-auto custom-scrollbar shadow ring-1 ring-black ring-opacity-5 rounded-lg">
-                        <table class="min-w-full divide-y divide-gray-300">
+                    <div class="overflow-x-auto custom-scrollbar">
+                        <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">RGP No.</th>
@@ -1208,37 +1382,104 @@
                     </div>
                 </div>
             `;
-            updateRGPListUI(filteredRGPData, 'rgp-list-tbody', 'pending-list-title');
+            updateRGPListUI(dataToDisplay, 'rgp-list-tbody', 'pending-list-title');
         }
 
         // --- TOTAL RGP LIST VIEW RENDERING & FILTERING (UNCHANGED) ---
 
+        function filterTotalRGPData() {
+            const filterText = document.getElementById('total-rgp-filter-text').value.trim().toUpperCase();
+            const statusFilter = document.getElementById('total-rgp-status-filter').value.toUpperCase();
+            const overdueFilterCheckbox = document.getElementById('total-rgp-overdue-filter');
+            const overdueFilter = overdueFilterCheckbox ? overdueFilterCheckbox.checked : window.totalRGPOverdueFilter; 
+
+            // Update global state from UI elements
+            window.totalRGPFilterText = filterText;
+            window.totalRGPStatusFilter = statusFilter;
+            window.totalRGPOverdueFilter = overdueFilter; 
+            
+            let dataToFilter = [...currentRGPData];
+            
+            // 1. Status Filter (unless an analytics filter is active)
+            if (!window.analyticsFilterType || window.totalRGPStatusFilter !== 'OPEN') {
+                 if (statusFilter !== 'ALL') {
+                    dataToFilter = dataToFilter.filter(r => r.status.toUpperCase() === statusFilter);
+                }
+            }
+
+
+            // 2. Overdue Filter (only applies to OPEN RGPs)
+            if (overdueFilter && statusFilter === 'OPEN') {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0); 
+                
+                dataToFilter = dataToFilter.filter(r => {
+                     if (!r.expected_return_date) return false;
+
+                    try {
+                        const expectedReturnDate = parseDate(r.expected_return_date);
+                        // RGP is considered overdue if it's 30 days past the expected return date.
+                        const thirtyDaysAfterReturn = new Date(expectedReturnDate);
+                        thirtyDaysAfterReturn.setDate(expectedReturnDate.getDate() + 30);
+                        
+                        return today > thirtyDaysAfterReturn;
+
+                    } catch (e) {
+                        return false;
+                    }
+                });
+            }
+
+
+            // 3. Text/Search Filter
+            const filteredData = dataToFilter.filter(rgp => {
+                const textMatch = !filterText ||
+                    rgp.rgp_number.toUpperCase().includes(filterText) ||
+                    (rgp.sent_to && rgp.sent_to.toUpperCase().includes(filterText)) ||
+                    (rgp.sent_by && rgp.sent_by.toUpperCase().includes(filterText)) ||
+                    rgp.materials.some(m => m.desc.toUpperCase().includes(filterText));
+                    
+                // 4. Analytics Filter (overrides Status/Text filter if active and checking OPEN items)
+                if (window.analyticsFilterType === 'vendor' && window.analyticsFilterValue) {
+                    return rgp.status.toUpperCase() === 'OPEN' && 
+                           (rgp.sent_to || "").toUpperCase() === window.analyticsFilterValue.toUpperCase();
+                } else if (window.analyticsFilterType === 'user' && window.analyticsFilterValue) {
+                    return rgp.status.toUpperCase() === 'OPEN' && 
+                           (rgp.sent_by || "").toUpperCase() === window.analyticsFilterValue.toUpperCase();
+                } else {
+                    return textMatch;
+                }
+            });
+
+            window.filteredTotalRGPData = filteredData;
+            updateRGPListUI(window.filteredTotalRGPData, 'total-rgp-list-tbody', 'total-list-title');
+        }
+
         function renderTotalRGPListView() {
             const contentDiv = document.getElementById('main-content');
+            
             let analyticsStatusMessage = '';
-
-            // Check if we are navigating from an analytics filter (e.g., from a chart click)
             if (window.analyticsFilterType === 'vendor' && window.analyticsFilterValue) {
-                analyticsStatusMessage = `<p class="text-indigo-600 font-bold mb-4 bg-indigo-100 p-3 rounded-lg border border-indigo-200">NOTE: Showing only Open RGPs for Vendor: <strong>${window.analyticsFilterValue}</strong>. <button onclick="navigateToTotalRGPList('ALL')" class="text-sm text-indigo-800 ml-4 underline">Clear Filter</button></p>`;
+                analyticsStatusMessage = `<p class="text-indigo-600 font-bold mb-4 bg-indigo-100 p-3 rounded-lg border border-indigo-200">NOTE: Showing only Open RGPs for Vendor: <strong>${window.analyticsFilterValue}</strong>. <button onclick="navigateToTotalRGPList('OPEN')" class="text-indigo-800 underline ml-2">Clear Filter</button></p>`;
             } else if (window.analyticsFilterType === 'user' && window.analyticsFilterValue) {
-                analyticsStatusMessage = `<p class="text-purple-600 font-bold mb-4 bg-purple-100 p-3 rounded-lg border border-purple-200">NOTE: Showing only Open RGPs for User: <strong>${window.analyticsFilterValue}</strong>. <button onclick="navigateToTotalRGPList('ALL')" class="text-sm text-purple-800 ml-4 underline">Clear Filter</button></p>`;
+                 analyticsStatusMessage = `<p class="text-purple-600 font-bold mb-4 bg-purple-100 p-3 rounded-lg border border-purple-200">NOTE: Showing only Open RGPs for User: <strong>${window.analyticsFilterValue}</strong>. <button onclick="navigateToTotalRGPList('OPEN')" class="text-purple-800 underline ml-2">Clear Filter</button></p>`;
+            } else {
+                 analyticsStatusMessage = '';
             }
+            
+            const overdueStatusMessage = window.totalRGPOverdueFilter ? 
+                `<p class="text-red-600 font-bold mb-4 bg-red-100 p-3 rounded-lg border border-red-200">FILTER ACTIVE: Showing only Overdue Open RGPs (30 days past expected return date).</p>` : '';
 
-            // Check for overdue filter only if no analytics filter is set
-            let overdueStatusMessage = '';
-            if (window.totalRGPOverdueFilter && !window.analyticsFilterType) {
-                overdueStatusMessage = `<p class="text-red-600 font-bold mb-4 bg-red-100 p-3 rounded-lg border border-red-200">NOTE: Filtered for <strong>Overdue OPEN RGPs only</strong>. <button onclick="navigateToTotalRGPList('OPEN')" class="text-sm text-red-800 ml-4 underline">Clear Overdue Filter</button></p>`;
-            }
 
             contentDiv.innerHTML = `
                 <div class="grid grid-cols-3 items-center p-4 bg-white rounded-xl shadow-lg mb-6">
                     <h2 id="total-list-title" class="text-2xl font-semibold text-gray-800 justify-self-start">Total RGP List</h2>
                     <div class="justify-self-center">
-                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOEAAADhCAMAAAAJ/gpwAAAArlBMVEVHcEwABwAABQAABQAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgD///8AAAC1G048AAAAPHRSTlMAECAwQFBgcICQoLCwwNDxARFRYXGBkaGxwdHh8gISIjJDY4Ojs9P0BBQ0RFR0hMU1dbXmFnaW9xdXh7f4u+K/UAAAFxSURBVHja7dzbVtsgFAZgAAEEiCBBgASBBOJ4wO3//6XlP0q9k+iWJmK3vud92n1d7xXQ0dHR0dHR0dHR0dHR0dHRCw5zNndh3t4s03j/x5057NvdhXmH27B/d9m/u+zP+x73c9+H8w53ce/tNn//z9wP5h3uu93O9/zcv+M+3Me6h+v7/pW797p24f9wP/7Rvd/1+R5Hw73Xpwu+P+29vW/7+yv+P+5z9+t+39l/hvud+/q+72x/+f9w/7P97X/f2V/h/uf729/3tv/u/sP+4/vb7/2H/3/9J/e3v/u+/+/+w/w33N8f7tNn/vX/3f2X/7fX+7Tf/5v3D/7ff6dJv++7+/+w/93693f+33//+tH97e/e7p6Oj/N74BfLw/kXkPAAAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAyNC0wMi0wNlQxODoyNjo1NyswMDowMNn1J50AAAAldEVYdGRhdGU6bW9kaWZ5ADIwMjQtMDItMDZUMTg6MjY6NTcrMDA6MDAD1L2oAAAAKHRFWHRkYXRlOnRpbWVzdGFtcD日時MjAyNC0wMi0wNlQxODoyNjo1NyswMDowMCE0L4cAAAAASUVORK5CYII=" alt="Britannia Logo" class="h-10 w-auto object-contain">
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOEAAADhCAMAAAAJ/gpwAAAArlBMVEVHcEwABwAABQAABQAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgD///8AAAC1G048AAAAPHRSTlMAECAwQFBgcICQoLCwwNDxARFRYXGBkaGxwdHh8gISIjJDY4Ojs9P0BBQ0RFR0hMU1dbXmFnaW9xdXh7f4u+K/UAAAFxSURBVHja7dzbVtsgFAZgAAEEiCBBgASBBOJ4wO3//6XlP0q9k+iWJmK3vud92n1d7xXQ0dHR0dHR0dHR0dHR0dHRCw5zNndh3t4s03j/x5057NvdhXmH27B/d9m/u+zP+x73c9+H8w53ce/tNn//z9wP5h3uu93O9/zcv+M+3Me6h+v7/pW797p24f9wP/7Rvd/1+R5Hw73Xpwu+P+29vW/7+yv+P+5z9+t+39l/hvud+/q+72x/+f9w/7P97X/f2V/h/uf729/3tv/u/sP+4/vb7/2H/3/9J/e3v/u+/+/+w/w33N8f7tNn/vX/3f2X/7fX+7Tf/5v3D/7ff6dJv++7+/+w/93693f+33//+tH97e/e7p6Oj/N74BfLw/kXkPAAAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAyNC0wMi0wNlQxODoyNjo1NyswMDowMNn1J50AAAAldEVYdGRhdGU6bW9kaWZ5ADIwMjQtMDItMDZUMTg6MjY6NTcrMDA6MDAD1L2oAAAAKHRFWHRkYXRlOnRpbWVzdGFtcD日時MjAyNC0wMi0wNlQxODoyNjo1NyswMDowMCE0L4cAAAAASUVORK5CYII=" alt="Britannia Logo" class="h-12 w-auto object-contain">
                     </div>
-                    <div class="flex space-x-4 justify-self-end">
-                        <button onclick="goHome()" class="bg-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-xl shadow-md hover:bg-gray-300 transition duration-150">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home 
+                    <div class="justify-self-end space-x-4">
+                         <button onclick="goHome()" class="bg-blue-600 text-white px-4 py-2 rounded-xl shadow-md hover:bg-blue-700 transition duration-150">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home
                         </button>
                          <button onclick="exportTotalRGPList()" class="bg-green-600 text-white px-4 py-2 rounded-xl shadow-md hover:bg-green-700 transition duration-150">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Export
@@ -1250,26 +1491,23 @@
                     ${analyticsStatusMessage}
                     ${overdueStatusMessage}
                     <div class="flex space-x-4">
-                        <input type="text" id="total-rgp-filter-text" placeholder="Filter by RGP No., Vendor, User or Material..." value="${window.totalRGPFilterText}"
-                               class="block w-1/3 rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50 p-2"
-                               oninput="filterTotalRGPData()">
-                        <select id="total-rgp-status-filter" 
-                                class="block w-1/6 rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50 p-2"
-                                onchange="window.totalRGPOverdueFilter = false; filterTotalRGPData()">
-                            <option value="ALL">All Statuses</option>
-                            <option value="OPEN">Open</option>
-                            <option value="CLOSED">Closed</option>
+                        <input type="text" id="total-rgp-filter-text" placeholder="Filter by RGP No., Vendor, User or Material..." value="${window.totalRGPFilterText}" class="block w-1/3 rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50 p-2" oninput="filterTotalRGPData()">
+                        <select id="total-rgp-status-filter" class="block w-1/6 rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50 p-2" onchange="filterTotalRGPData()">
+                            <option value="ALL" ${window.totalRGPStatusFilter === 'ALL' ? 'selected' : ''}>ALL RGPs</option>
+                            <option value="OPEN" ${window.totalRGPStatusFilter === 'OPEN' ? 'selected' : ''}>OPEN</option>
+                            <option value="CLOSED" ${window.totalRGPStatusFilter === 'CLOSED' ? 'selected' : ''}>CLOSED</option>
                         </select>
-                        <button onclick="window.totalRGPOverdueFilter = !window.totalRGPOverdueFilter; window.totalRGPStatusFilter = 'OPEN'; filterTotalRGPData();" 
-                                class="w-1/6 py-2 px-4 rounded-xl shadow-md transition duration-150 ${window.totalRGPOverdueFilter ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-yellow-400 text-yellow-900 hover:bg-yellow-500'}">
-                            ${window.totalRGPOverdueFilter ? 'Clear Overdue Filter' : 'Filter Overdue'}
-                        </button>
+                        <label for="total-rgp-overdue-filter" class="flex items-center space-x-2 w-1/6 p-2">
+                             <input type="checkbox" id="total-rgp-overdue-filter" ${window.totalRGPOverdueFilter ? 'checked' : ''} onchange="filterTotalRGPData()" 
+                                 class="rounded border-gray-300 text-red-600 shadow-sm focus:border-red-300 focus:ring focus:ring-red-200 focus:ring-opacity-50">
+                             <span class="text-sm font-medium text-gray-700">Show Overdue Only</span>
+                        </label>
                     </div>
                 </div>
 
                 <div class="bg-white p-6 rounded-xl shadow-lg">
-                    <div class="overflow-x-auto custom-scrollbar shadow ring-1 ring-black ring-opacity-5 rounded-lg">
-                        <table class="min-w-full divide-y divide-gray-300">
+                    <div class="overflow-x-auto custom-scrollbar">
+                        <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">RGP No.</th>
@@ -1292,101 +1530,59 @@
                     </div>
                 </div>
             `;
+            // Ensure the correct filtered data is shown on first render
+            filterTotalRGPData();
             
-            // Set the dropdown value based on the filter state
-            document.getElementById('total-rgp-status-filter').value = window.totalRGPStatusFilter;
-            
-            window.filterTotalRGPData = filterTotalRGPData; // Expose globally
-            window.navigateToTotalRGPList = navigateToTotalRGPList; // Expose globally for filter clearing
-            
-            filterTotalRGPData(); // Apply initial filter
+            // If the view was navigated to from a metric, ensure the title is updated
+             const totalCount = [...new Set(window.filteredTotalRGPData.map(r => r.rgp_number))].length;
+             document.getElementById('total-list-title').textContent = `Total RGP List (${totalCount} Unique RGPs)`;
         }
 
-        // Filter function for the Total RGP List (called on render and input change)
-        function filterTotalRGPData() {
-            const filterText = (document.getElementById('total-rgp-filter-text')?.value || '').toLowerCase();
-            const statusFilter = document.getElementById('total-rgp-status-filter')?.value || 'ALL';
+        // --- APPROVAL RGP LIST VIEW RENDERING (NEW) ---
+
+        function updateApprovalRGPListUI(data) {
+            const rows = dataToRowData(data); // Re-use the dataToRowData function
+            renderRGPTableBody(rows, 'approval-list-tbody');
             
-            // Update global state for persistence
-            window.totalRGPFilterText = filterText;
-            window.totalRGPStatusFilter = statusFilter;
-            
-            const overdueCheckToday = new Date();
-            overdueCheckToday.setHours(0, 0, 0, 0); 
-            
-            const filteredData = currentRGPData.filter(rgp => {
-                const rgpDataString = [
-                    rgp.rgp_number, 
-                    rgp.sent_to, 
-                    rgp.sent_by, 
-                    rgp.materials.map(m => m.desc).join(' ')
-                ].join(' ').toLowerCase();
-
-                const textMatch = rgpDataString.includes(filterText);
-
-                const statusMatch = statusFilter === 'ALL' || rgp.status.toUpperCase() === statusFilter.toUpperCase();
-                
-                let overdueMatch = true;
-                if (window.totalRGPOverdueFilter && rgp.status.toUpperCase() === 'OPEN') {
-                    try {
-                        const expectedReturnDate = parseDate(rgp.expected_return_date);
-                        const thirtyDaysAfterReturn = new Date(expectedReturnDate);
-                        thirtyDaysAfterReturn.setDate(expectedReturnDate.getDate() + 30);
-                        overdueMatch = overdueCheckToday > thirtyDaysAfterReturn;
-                    } catch (e) {
-                        overdueMatch = false;
-                    }
-                } else if (window.totalRGPOverdueFilter && rgp.status.toUpperCase() !== 'OPEN') {
-                    // If filtering for overdue, only consider OPEN ones
-                     overdueMatch = false;
-                }
-
-                // Analytics Filter Logic (highest priority filter)
-                if (window.analyticsFilterType === 'vendor' && window.analyticsFilterValue) {
-                    const vendorMatch = rgp.sent_to === window.analyticsFilterValue && rgp.status.toUpperCase() === 'OPEN';
-                    return vendorMatch && textMatch && overdueMatch;
-                } else if (window.analyticsFilterType === 'user' && window.analyticsFilterValue) {
-                    const userMatch = rgp.sent_by === window.analyticsFilterValue && rgp.status.toUpperCase() === 'OPEN';
-                    return userMatch && textMatch && overdueMatch;
-                }
-                
-                // Regular filtering
-                return textMatch && statusMatch && overdueMatch;
-            });
-
-            window.filteredTotalRGPData = filteredData;
-            updateRGPListUI(window.filteredTotalRGPData, 'total-rgp-list-tbody', 'total-list-title');
+            // Update header with count
+            const titleElement = document.getElementById('approval-list-title');
+            if (titleElement) {
+                const totalCount = [...new Set(data.map(r => r.rgp_number))].length;
+                titleElement.textContent = `RGP List for Approval (${totalCount} Unique RGPs)`;
+            }
         }
-
-
-        // --- APPROVAL LIST VIEW RENDERING & LOGIC (UNCHANGED) ---
-
+        
         function renderApprovalRGPListView() {
             const contentDiv = document.getElementById('main-content');
             
-            // Re-filter the data just in case it's stale
-            window.filteredApprovalRGPData = [...window.approvalRGPData];
-
+            // The data is pre-filtered by RGPManager.get_approval_rgp_data (open, overdue OR 30 days old)
+            // It also excludes fully returned items by filtering the materials within dataToRowData
+            const dataToDisplay = window.approvalRGPData.filter(rgp => rgp.materials.some(m => m.initial_qty > m.returned_qty));
+            window.filteredApprovalRGPData = dataToDisplay;
+            
             contentDiv.innerHTML = `
                 <div class="grid grid-cols-3 items-center p-4 bg-white rounded-xl shadow-lg mb-6">
                     <h2 id="approval-list-title" class="text-2xl font-semibold text-gray-800 justify-self-start">RGP List for Approval</h2>
                     <div class="justify-self-center">
-                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOEAAADhCAMAAAAJ/gpwAAAArlBMVEVHcEwABwAABQAABQAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgD///8AAAC1G048AAAAPHRSTlMAECAwQFBgcICQoLCwwNDxARFRYXGBkaGxwdHh8gISIjJDY4Ojs9P0BBQ0RFR0hMU1dbXmFnaW9xdXh7f4u+K/UAAAFxSURBVHja7dzbVtsgFAZgAAEEiCBBgASBBOJ4wO3//6XlP0q9k+iWJmK3vud92n1d7xXQ0dHR0dHR0dHR0dHR0dHRCw5zNndh3t4s03j/x5057NvdhXmH27B/d9m/u+zP+x73c9+H8w53ce/tNn//z9wP5h3uu93O9/zcv+M+3Me6h+v7/pW797p24f9wP/7Rvd/1+R5Hw73Xpwu+P+29vW/7+yv+P+5z9+t+39l/hvud+/q+72x/+f9w/7P97X/f2V/h/uf729/3tv/u/sP+4/vb7/2H/3/9J/e3v/u+/+/+w/w33N8f7tNn/vX/3f2X/7fX+7Tf/5v3D/7ff6dJv++7+/+w/93693f+33//+tH97e/e7p6Oj/N74BfLw/kXkPAAAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAyNC0wMi0wNlQxODoyNjo1NyswMDowMNn1J50AAAAldEVYdGRhdGU6bW9kaWZ5ADIwMjQtMDItMDZUMTg6MjY6NTcrMDA6MDAD1L2oAAAAKHRFWHRkYXRlOnRpbWVzdGFtcD日時MjAyNC0wMi0wNlQxODoyNjo1NyswMDowMCE0L4cAAAAASUVORK5CYII=" alt="Britannia Logo" class="h-10 w-auto object-contain">
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOEAAADhCAMAAAAJ/gpwAAAArlBMVEVHcEwABwAABQAABQAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgD///8AAAC1G048AAAAPHRSTlMAECAwQFBgcICQoLCwwNDxARFRYXGBkaGxwdHh8gISIjJDY4Ojs9P0BBQ0RFR0hMU1dbXmFnaW9xdXh7f4u+K/UAAAFxSURBVHja7dzbVtsgFAZgAAEEiCBBgASBBOJ4wO3//6XlP0q9k+iWJmK3vud92n1d7xXQ0dHR0dHR0dHR0dHR0dHRCw5zNndh3t4s03j/x5057NvdhXmH27B/d9m/u+zP+x73c9+H8w53ce/tNn//z9wP5h3uu93O9/zcv+M+3Me6h+v7/pW797p24f9wP/7Rvd/1+R5Hw73Xpwu+P+29vW/7+yv+P+5z9+t+39l/hvud+/q+72x/+f9w/7P97X/f2V/h/uf729/3tv/u/sP+4/vb7/2H/3/9J/e3v/u+/+/+w/w33N8f7tNn/vX/3f2X/7fX+7Tf/5v3D/7ff6dJv++7+/+w/93693f+33//+tH97e/e7p6Oj/N74BfLw/kXkPAAAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAyNC0wMi0wNlQxODoyNjo1NyswMDowMNn1J50AAAAldEVYdGRhdGU6bW9kaWZ5ADIwMjQtMDItMDZUMTg6MjY6NTcrMDA6MDAD1L2oAAAAKHRFWHRkYXRlOnRpbWVzdGFtcD日時MjAyNC0wMi0wNlQxODoyNjo1NyswMDowMCE0L4cAAAAASUVORK5CYII=" alt="Britannia Logo" class="h-12 w-auto object-contain">
                     </div>
-                    <div class="flex space-x-4 justify-self-end">
-                        <button onclick="goHome()" class="bg-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-xl shadow-md hover:bg-gray-300 transition duration-150">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home 
+                    <div class="justify-self-end space-x-4">
+                         <button onclick="goHome()" class="bg-blue-600 text-white px-4 py-2 rounded-xl shadow-md hover:bg-blue-700 transition duration-150">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home
                         </button>
                          <button onclick="exportApprovalRGPList()" class="bg-green-600 text-white px-4 py-2 rounded-xl shadow-md hover:bg-green-700 transition duration-150">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Export
                         </button>
                     </div>
                 </div>
+                
+                <div class="bg-red-50 p-4 rounded-xl shadow-lg border border-red-200 mb-6">
+                    <p class="font-bold text-red-800">Note: This list includes all OPEN RGPs that are either past their expected return date OR are more than 30 days old from the Issue Date.</p>
+                </div>
 
                 <div class="bg-white p-6 rounded-xl shadow-lg">
-                    <p class="text-sm text-gray-600 mb-4">This list includes Open RGPs that are either past their expected return date OR are 30+ days old from the issue date. These are flagged for management review.</p>
-                    <div class="overflow-x-auto custom-scrollbar shadow ring-1 ring-black ring-opacity-5 rounded-lg">
-                        <table class="min-w-full divide-y divide-gray-300">
+                    <div class="overflow-x-auto custom-scrollbar">
+                        <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">RGP No.</th>
@@ -1403,141 +1599,28 @@
                                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                                 </tr>
                             </thead>
-                            <tbody id="rgp-list-tbody" class="bg-white divide-y divide-gray-200">
+                            <tbody id="approval-list-tbody" class="bg-white divide-y divide-gray-200">
                             </tbody>
                         </table>
                     </div>
                 </div>
             `;
-            updateRGPListUI(window.filteredApprovalRGPData, 'rgp-list-tbody', 'approval-list-title');
+            updateApprovalRGPListUI(dataToDisplay);
         }
 
+        // --- ANALYTICS VIEW RENDERING (NEW) ---
 
-        // --- ANALYTICS VIEW RENDERING & LOGIC (UNCHANGED) ---
-
-        function renderAnalyticsView(data) {
-            const contentDiv = document.getElementById('main-content');
-            
-            // Only use open RGPs for real-time analytics
-            const openRGPData = data.filter(r => r.status.toUpperCase() === "OPEN"); 
-            const avgDaysOpen = RGPManager.get_avg_days_open(openRGPData);
-            const totalOutstandingQty = RGPManager.get_total_outstanding_qty(openRGPData);
-            const vendorCounts = RGPManager.get_vendor_open_counts(openRGPData);
-            const userCounts = RGPManager.get_user_open_counts(openRGPData);
-            const rgpOpenCounts = [
-                RGPManager.get_open_rgps(data),
-                RGPManager.get_closed_rgps(data),
-            ];
-
-            contentDiv.innerHTML = `
-                <div class="grid grid-cols-3 items-center p-4 bg-white rounded-xl shadow-lg mb-6">
-                    <h2 class="text-2xl font-semibold text-gray-800 justify-self-start">RGP Analytics</h2>
-                    <div class="justify-self-center">
-                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOEAAADhCAMAAAAJ/gpwAAAArlBMVEVHcEwABwAABQAABQAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgAABgD///8AAAC1G048AAAAPHRSTlMAECAwQFBgcICQoLCwwNDxARFRYXGBkaGxwdHh8gISIjJDY4Ojs9P0BBQ0RFR0hMU1dbXmFnaW9xdXh7f4u+K/UAAAFxSURBVHja7dzbVtsgFAZgAAEEiCBBgASBBOJ4wO3//6XlP0q9k+iWJmK3vud92n1d7xXQ0dHR0dHR0dHR0dHR0dHRCw5zNndh3t4s03j/x5057NvdhXmH27B/d9m/u+zP+x73c9+H8w53ce/tNn//z9wP5h3uu93O9/zcv+M+3Me6h+v7/pW797p24f9wP/7Rvd/1+R5Hw73Xpwu+P+29vW/7+yv+P+5z9+t+39l/hvud+/q+72x/+f9w/7P97X/f2V/h/uf729/3tv/u/sP+4/vb7/2H/3/9J/e3v/u+/+/+w/w33N8f7tNn/vX/3f2X/7fX+7Tf/5v3D/7ff6dJv++7+/+w/93693f+33//+tH97e/e7p6Oj/N74BfLw/kXkPAAAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAyNC0wMi0wNlQxODoyNjo1NyswMDowMNn1J50AAAAldEVYdGRhdGU6bW9kaWZ5ADIwMjQtMDItMDZUMTg6MjY6NTcrMDA6MDAD1L2oAAAAKHRFWHRkYXRlOnRpbWVzdGFtcD日時MjAyNC0wMi0wNlQxODoyNjo1NyswMDowMCE0L4cAAAAASUVORK5CYII=" alt="Britannia Logo" class="h-10 w-auto object-contain">
-                    </div>
-                    <button onclick="goHome()" class="bg-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-xl shadow-md hover:bg-gray-300 transition duration-150 justify-self-end">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home 
-                    </button>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                    <div class="bg-white p-6 rounded-xl shadow-lg text-center">
-                        <p class="text-sm text-gray-500 font-medium">Avg. Days Open (Open RGPs)</p>
-                        <p class="text-4xl font-extrabold mt-2 text-purple-600">${avgDaysOpen} days</p>
-                    </div>
-                    <div class="bg-white p-6 rounded-xl shadow-lg text-center">
-                        <p class="text-sm text-gray-500 font-medium">Total Outstanding Qty (Open RGPs)</p>
-                        <p class="text-4xl font-extrabold mt-2 text-red-600">${totalOutstandingQty}</p>
-                    </div>
-                    <div class="bg-white p-6 rounded-xl shadow-lg text-center">
-                        <p class="text-sm text-gray-500 font-medium">Open RGPs (Click to Filter)</p>
-                        <p onclick="navigateToTotalRGPList('OPEN')" class="text-4xl font-extrabold mt-2 text-orange-500 cursor-pointer hover:text-orange-700">${openRGPData.length}</p>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="bg-white p-6 rounded-xl shadow-lg">
-                        <h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">RGP Status Breakdown (Total)</h3>
-                        <div class="h-64">
-                            <canvas id="rgp-status-chart"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="bg-white p-6 rounded-xl shadow-lg">
-                        <h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">Top 5 Vendors (Open RGPs)</h3>
-                        <div id="analytics-vendor-panel" class="space-y-3">
-                            ${renderVendorBarChart(vendorCounts)}
-                        </div>
-                    </div>
-
-                    <div class="bg-white p-6 rounded-xl shadow-lg">
-                        <h3 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">Top 5 Users (Open RGPs)</h3>
-                        <div id="analytics-user-panel" class="space-y-3">
-                            ${renderUserBarChart(userCounts)}
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            // Render the Charts
-            renderStatusChart(rgpOpenCounts);
-            window.navigateToAnalyticsFilter = navigateToAnalyticsFilter; // Expose globally for bar chart clicks
-        }
-        
-        function renderStatusChart(rgpCounts) {
-            const ctx = document.getElementById('rgp-status-chart');
-            if (!ctx) return;
-            
-            new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Open RGPs', 'Closed RGPs'],
-                    datasets: [{
-                        label: 'RGP Count',
-                        data: rgpCounts,
-                        backgroundColor: [
-                            'rgb(245, 158, 11)', // Orange for Open
-                            'rgb(16, 185, 129)', // Green for Closed
-                        ],
-                        hoverOffset: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    onClick: (e, elements) => {
-                        if (elements.length > 0) {
-                            const index = elements[0].index;
-                            if (index === 0) { // Open RGPs
-                                navigateToTotalRGPList('OPEN');
-                            } else if (index === 1) { // Closed RGPs
-                                navigateToTotalRGPList('CLOSED');
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                        },
-                        title: {
-                            display: false,
-                        }
-                    }
-                }
-            });
-        }
-        
         function renderUserBarChart(userCounts) {
             let html = '';
             if (userCounts.length === 0) {
-                return '<p class="text-gray-500 italic p-3">No open RGPs to analyze users.</p>';
+                 return '<p class="text-gray-500 italic p-3">No open RGPs to analyze users.</p>';
             }
-            
-            const maxCount = userCounts[0][1] > 0 ? userCounts[0][1] : 1; 
 
+            const maxCount = userCounts[0][1] > 0 ? userCounts[0][1] : 1;
+            
             userCounts.slice(0, 5).forEach(([user, count]) => {
                 const widthPercent = (count / maxCount) * 100;
-                
+
                 html += `
                     <div onclick="navigateToAnalyticsFilter('user', '${user}')" class="vendor-bar-container cursor-pointer hover:bg-purple-50 p-1 rounded transition duration-150">
                         <div class="vendor-label truncate">${user}</div>
@@ -1554,14 +1637,14 @@
         function renderVendorBarChart(vendorCounts) {
             let html = '';
             if (vendorCounts.length === 0) {
-                return '<p class="text-gray-500 italic p-3">No open RGPs to analyze vendors.</p>';
+                 return '<p class="text-gray-500 italic p-3">No open RGPs to analyze vendors.</p>';
             }
-            
-            const maxCount = vendorCounts[0][1] > 0 ? vendorCounts[0][1] : 1; 
 
+            const maxCount = vendorCounts[0][1] > 0 ? vendorCounts[0][1] : 1;
+            
             vendorCounts.slice(0, 5).forEach(([vendor, count]) => {
                 const widthPercent = (count / maxCount) * 100;
-                
+
                 html += `
                     <div onclick="navigateToAnalyticsFilter('vendor', '${vendor}')" class="vendor-bar-container cursor-pointer hover:bg-indigo-50 p-1 rounded transition duration-150">
                         <div class="vendor-label truncate">${vendor}</div>
@@ -1575,162 +1658,86 @@
             return html;
         }
 
-
-        // --- GENERIC LIST RENDERING HELPERS (UNCHANGED) ---
-
-        /**
-         * Flattens the RGP structure so each material gets its own row.
-         * Sets 'rowSpan' property on the first material of each RGP for merged cells.
-         * @param {Array<Object>} data - Array of RGP objects.
-         * @returns {Array<Object>} Flattened array of row objects.
-         */
-        function flattenRGPData(data) {
-            return data.flatMap(rgp => {
-                const flattenedMaterials = rgp.materials.map((material, index) => {
-                    const outstandingQty = material.initial_qty - material.returned_qty;
-                    
-                    return {
-                        // RGP-level data (only for the first material row)
-                        rgpNumber: rgp.rgp_number,
-                        sentTo: rgp.sent_to,
-                        sentBy: rgp.sent_by,
-                        issueDate: formatDateDisplay(rgp.issue_date),
-                        expectedReturnDate: formatDateDisplay(rgp.expected_return_date),
-                        status: rgp.status,
-                        daysOpen: rgp.days_open,
-                        rowSpan: rgp.materials.length,
-                        isFirstRow: index === 0,
-                        id: rgp.id, // Unique document ID
-                        
-                        // Material-level data
-                        materialDesc: material.desc,
-                        initialQty: material.initial_qty,
-                        returnedQty: material.returned_qty,
-                        outstandingQty: outstandingQty,
-                        remarks: material.remarks
-                    };
-                });
-                return flattenedMaterials;
-            });
-        }
-        
-        /**
-         * Renders the flattened RGP data into a table body.
-         * @param {Array<Object>} data - The filtered/pending RGP data array.
-         * @param {string} tbodyId - The ID of the <tbody> element.
-         * @param {string} titleId - The ID of the title element to update count.
-         */
-        function updateRGPListUI(data, tbodyId, titleId) {
-            const tbody = document.getElementById(tbodyId);
-            const title = document.getElementById(titleId);
-
-            if (!tbody) return; 
-
-            // 1. Update Title Count
-            const totalCount = data.length;
-            const uniqueRGPCount = new Set(data.map(r => r.rgp_number)).size;
-            if (title) {
-                const baseTitle = title.textContent.split('(')[0].trim();
-                title.textContent = `${baseTitle} (${uniqueRGPCount} Unique RGPs, ${totalCount} Material Rows)`;
-            }
-
-            // 2. Clear table and check for empty state
-            tbody.innerHTML = '';
-
-            if (data.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="12" class="px-6 py-12 text-center text-gray-500 italic text-lg">
-                            No RGPs matched the current filter/view.
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
-
-            // 3. Flatten and render
-            const flattenedData = flattenRGPData(data);
+        function renderAnalyticsView(data) {
+            const contentDiv = document.getElementById('main-content');
             
-            flattenedData.forEach(row => {
-                let rgpNumberCell = '';
-                let vendorCell = '';
-                let sentByCell = '';
-                let issueDateCell = '';
-                let expectedReturnDateCell = '';
-                let statusCell = '';
-                let daysOpenCell = '';
-                let actionCell = '';
+            const totalRgpCount = RGPManager.get_total_rgps(data);
+            const openRgpCount = RGPManager.get_open_rgps(data);
+            const closedRgpCount = RGPManager.get_closed_rgps(data);
+            const overdueRgpCount = RGPManager.get_overdue_rgps(data);
+            
+            // Stats based on OPEN RGPs
+            const openRGPData = data.filter(r => r.status.toUpperCase() === "OPEN");
+            const avgDaysOpen = RGPManager.get_avg_days_open(openRGPData);
+            const totalOutstandingQty = RGPManager.get_total_outstanding_qty(openRGPData);
+            const topVendors = RGPManager.get_vendor_open_counts(openRGPData);
+            const topUsers = RGPManager.get_user_open_counts(openRGPData);
 
-                // Calculate status color based on open status and days
-                let statusColor = 'text-gray-700';
-                let daysOpenColor = 'text-gray-700';
-                if (row.status.toUpperCase() === 'OPEN') {
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
+            contentDiv.innerHTML = `
+                <div class="grid grid-cols-2 items-center p-4 bg-white rounded-xl shadow-lg mb-6">
+                    <h2 class="text-2xl font-semibold text-gray-800">RGP Analytics</h2>
+                    <div class="justify-self-end">
+                         <button onclick="goHome()" class="bg-blue-600 text-white px-4 py-2 rounded-xl shadow-md hover:bg-blue-700 transition duration-150">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                    <div onclick="navigateToTotalRGPList('ALL')" class="p-4 rounded-xl shadow-md cursor-pointer hover:shadow-lg transition duration-150 border-l-4 border-blue-500 bg-blue-50">
+                        <p class="text-sm text-gray-500 font-medium">Total RGPs</p>
+                        <p class="text-3xl font-extrabold mt-1 text-blue-600">${totalRgpCount}</p>
+                    </div>
+                    <div onclick="navigateToTotalRGPList('OPEN')" class="p-4 rounded-xl shadow-md cursor-pointer hover:shadow-lg transition duration-150 border-l-4 border-orange-500 bg-orange-50">
+                        <p class="text-sm text-gray-500 font-medium">Open RGPs</p>
+                        <p class="text-3xl font-extrabold mt-1 text-orange-600">${openRgpCount}</p>
+                    </div>
+                    <div onclick="navigateToTotalRGPList('OPEN', true)" class="p-4 rounded-xl shadow-md cursor-pointer hover:shadow-lg transition duration-150 border-l-4 border-red-500 bg-red-50">
+                        <p class="text-sm text-gray-500 font-medium">Overdue RGPs</p>
+                        <p class="text-3xl font-extrabold mt-1 text-red-600">${overdueRgpCount}</p>
+                    </div>
+                     <div onclick="navigateToTotalRGPList('CLOSED')" class="p-4 rounded-xl shadow-md cursor-pointer hover:shadow-lg transition duration-150 border-l-4 border-green-500 bg-green-50">
+                        <p class="text-sm text-gray-500 font-medium">Closed RGPs</p>
+                        <p class="text-3xl font-extrabold mt-1 text-green-600">${closedRgpCount}</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg space-y-4">
+                        <h3 class="text-xl font-semibold text-gray-800 border-b pb-2">Open RGP KPIs</h3>
+                        
+                        <div class="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                             <p class="text-sm text-gray-700 font-medium">Average Days Open (Open RGPs)</p>
+                             <p class="text-2xl font-extrabold text-indigo-600 mt-1">${avgDaysOpen} days</p>
+                        </div>
+                        
+                        <div class="p-3 bg-teal-50 rounded-lg border border-teal-200">
+                             <p class="text-sm text-gray-700 font-medium">Total Outstanding Qty (All Items)</p>
+                             <p class="text-2xl font-extrabold text-teal-600 mt-1">${totalOutstandingQty}</p>
+                        </div>
+                        
+                         <div class="p-3 bg-red-50 rounded-lg border border-red-200">
+                             <p class="text-sm text-gray-700 font-medium">Overdue RGPs (30+ days past return)</p>
+                             <p class="text-2xl font-extrabold text-red-600 mt-1">${overdueRgpCount}</p>
+                        </div>
+
+                    </div>
                     
-                    let isOverdue = false;
-                    try {
-                        const expectedReturnDate = parseDate(row.expectedReturnDate.split('/').reverse().join('-'));
-                        const thirtyDaysAfterReturn = new Date(expectedReturnDate);
-                        thirtyDaysAfterReturn.setDate(expectedReturnDate.getDate() + 30);
-                        isOverdue = today > thirtyDaysAfterReturn;
-                    } catch(e) { /* ignore date parsing errors for color coding */ }
+                    <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
+                        <h3 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">Top 5 Vendors (By Open RGP Count)</h3>
+                        <div id="analytics-vendor-panel" class="space-y-3">
+                           ${renderVendorBarChart(topVendors)}
+                        </div>
+                    </div>
 
-                    if (isOverdue) {
-                        statusColor = 'text-red-700 bg-red-100 rounded-full py-1 px-2';
-                        daysOpenColor = 'text-red-700 font-extrabold';
-                    } else if (row.daysOpen >= 30) {
-                        statusColor = 'text-orange-700 bg-yellow-100 rounded-full py-1 px-2';
-                        daysOpenColor = 'text-orange-700 font-extrabold';
-                    } else {
-                        statusColor = 'text-orange-600 bg-orange-100 rounded-full py-1 px-2';
-                        daysOpenColor = 'text-gray-700';
-                    }
-                } else {
-                     statusColor = 'text-green-600';
-                }
-
-                if (row.isFirstRow) {
-                    rgpNumberCell = `<td rowspan="${row.rowSpan}" class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">${row.rgpNumber}</td>`;
-                    vendorCell = `<td rowspan="${row.rowSpan}" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.sentTo}</td>`;
-                    sentByCell = `<td rowspan="${row.rowSpan}" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${row.sentBy}</td>`;
-                    issueDateCell = `<td rowspan="${row.rowSpan}" class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">${row.issueDate}</td>`;
-                    expectedReturnDateCell = `<td rowspan="${row.rowSpan}" class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">${row.expectedReturnDate}</td>`;
-                    statusCell = `<td rowspan="${row.rowSpan}" class="px-6 py-4 whitespace-nowrap text-sm font-bold text-center">
-                                    <span class="${statusColor}">${row.status.toUpperCase()}</span>
-                                  </td>`;
-                    daysOpenCell = `<td rowspan="${row.rowSpan}" class="px-6 py-4 whitespace-nowrap text-sm font-bold text-center ${daysOpenColor}">${row.daysOpen}</td>`;
-                    actionCell = `<td rowspan="${row.rowSpan}" class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <button onclick="editRGP('${row.rgpNumber}')" title="Go to Return Entry" class="text-indigo-600 hover:text-indigo-900 disabled:text-gray-400 disabled:cursor-not-allowed" ${row.status.toUpperCase() === 'CLOSED' ? 'disabled' : ''}>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                    </button>
-                                </td>`;
-                }
-
-                // Material Row
-                let outstandingColor = 'text-gray-700';
-                if (row.outstandingQty > 0) {
-                    outstandingColor = row.outstandingQty > 0.1 * row.initialQty ? 'text-red-600 font-bold' : 'text-orange-600';
-                }
-
-                const materialRow = `
-                    <tr>
-                        ${rgpNumberCell}
-                        ${vendorCell}
-                        ${sentByCell}
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 truncate max-w-xs" title="${row.materialDesc} (Remarks: ${row.remarks || 'N/A'})">${row.materialDesc}</td>
-                        ${issueDateCell}
-                        ${expectedReturnDateCell}
-                        ${statusCell}
-                        ${daysOpenCell}
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-blue-600">${row.initialQty}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-green-600">${row.returnedQty}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-center ${outstandingColor}">${row.outstandingQty}</td>
-                        ${actionCell}
-                    </tr>
-                `;
-                tbody.innerHTML += materialRow;
-            });
+                     <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
+                        <h3 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">Top 5 Users (By Open RGP Count)</h3>
+                        <div id="analytics-user-panel" class="space-y-3">
+                           ${renderUserBarChart(topUsers)}
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
 
@@ -1743,84 +1750,85 @@
          */
         function rowsToExportData(rows) {
             const header = [
-                'RGP No.', 
-                'Vendor / Sent To', 
-                'Sent By', 
-                'Material Desc', 
-                'Issue Date', 
-                'Exp. Return Date', 
-                'Status', 
-                'Days Open', 
-                'Initial Qty', 
-                'Returned Qty', 
-                'Outstanding Qty', 
-                'Remarks', 
-                'Unique ID'
+                'RGP No.', 'Vendor / Sent To', 'Sent By', 'Material Desc', 
+                'Issue Date', 'Exp. Return Date', 'Status', 'Days Open', 
+                'Initial Qty', 'Returned Qty', 'Outstanding Qty', 'Remarks', 'Unique ID'
             ];
-            
             const data = [header];
 
             rows.forEach(row => {
-                const materialData = currentRGPData.find(r => r.id === row.id)?.materials.find(m => m.desc === row.materialDesc);
-                const remarks = materialData ? materialData.remarks : '';
-
                 data.push([
-                    row.rgpNumber, 
-                    row.sentTo, 
-                    row.sentBy, 
-                    row.materialDesc, 
-                    row.issueDate, 
-                    row.expectedReturnDate, 
-                    row.status.toUpperCase(), 
-                    row.daysOpen, 
-                    row.initialQty, 
-                    row.returnedQty, 
+                    row.rgpNumber,
+                    row.vendor,
+                    row.sentBy,
+                    row.materialDesc,
+                    row.issueDate,
+                    row.expectedReturnDate,
+                    row.status.toUpperCase(),
+                    row.daysOpen,
+                    row.initialQty,
+                    row.returnedQty,
                     row.outstandingQty,
-                    remarks, 
-                    row.id // Unique ID included for reference
+                    row.remarks || '', // Add remarks
+                    row.uniqueId
                 ]);
             });
             return data;
         }
 
         /**
-         * Generic function to generate an Excel file from table data.
-         * @param {Array<Object>} data - The raw RGP data list (not flattened).
-         * @param {string} fileName - Name of the file.
+         * Generates and downloads an Excel file.
+         * @param {Array<Array<any>>} data - The 2D array of data to export.
+         * @param {string} sheetName - The name for the Excel sheet.
+         * @param {string} fileName - The name for the downloaded file.
          */
-        function exportToExcel(data, fileName) {
-            if (data.length === 0) {
-                showMessage("Export Error", "No data to export.", true);
-                return;
+        function exportToExcel(data, sheetName, fileName) {
+            try {
+                const ws = XLSX.utils.aoa_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, sheetName);
+                XLSX.writeFile(wb, fileName);
+                showMessage("Export Successful", `${fileName} has been downloaded.`);
+            } catch (e) {
+                console.error("Export failed:", e);
+                showMessage("Export Failed", "Could not generate the Excel file.", true);
             }
-            
-            // Flatten the structure for export
-            const exportData = rowsToExportData(flattenRGPData(data));
-            
-            const ws = XLSX.utils.aoa_to_sheet(exportData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "RGP Data");
-            
-            XLSX.writeFile(wb, fileName);
-            showMessage("Export Success", `Data successfully exported to ${fileName}`, false);
         }
 
-        function exportPendingRGPList() {
-            exportToExcel(filteredRGPData, 'Pending_RGP_List.xlsx');
+        window.exportPendingRGPList = function() {
+            if (filteredRGPData.length === 0) {
+                 showMessage("Export Error", "No data to export in the pending list.", true);
+                 return;
+            }
+            const rows = dataToRowData(filteredRGPData);
+            const data = rowsToExportData(rows);
+            exportToExcel(data, 'Pending RGPs', 'Pending_RGP_List.xlsx');
         }
 
-        function exportTotalRGPList() {
-            exportToExcel(window.filteredTotalRGPData, 'Total_RGP_List.xlsx');
+        window.exportTotalRGPList = function() {
+             if (window.filteredTotalRGPData.length === 0) {
+                 showMessage("Export Error", "No data to export in the total list.", true);
+                 return;
+            }
+            const rows = dataToRowData(window.filteredTotalRGPData);
+            const data = rowsToExportData(rows);
+            exportToExcel(data, 'Total RGPs', 'Total_RGP_List.xlsx');
         }
         
-        function exportApprovalRGPList() {
-             exportToExcel(window.filteredApprovalRGPData, 'RGP_Approval_List.xlsx');
+         window.exportApprovalRGPList = function() {
+             if (window.filteredApprovalRGPData.length === 0) {
+                 showMessage("Export Error", "No data to export in the approval list.", true);
+                 return;
+            }
+            const rows = dataToRowData(window.filteredApprovalRGPData);
+            const data = rowsToExportData(rows);
+            exportToExcel(data, 'RGPs for Approval', 'RGP_Approval_List.xlsx');
         }
 
 
-        // --- NAVIGATION JUMP FUNCTIONS (UNCHANGED) ---
+        // --- GLOBAL NAVIGATION HELPERS (Called from Dashboard/Analytics UI) ---
 
-        // Function to navigate from a metric click on the Dashboard to the Total RGP List
+        // Function to navigate from metric boxes to Total RGP List with specific filters
         window.navigateToTotalRGPList = function(status, overdue = false) {
             window.totalRGPFilterText = '';
             window.analyticsFilterType = null;
